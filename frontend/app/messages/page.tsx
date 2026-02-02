@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, Suspense } from 'react';
 import Navbar from '@/components/navbar';
 import { useSearchParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
@@ -7,7 +7,7 @@ import { useAuth } from '@/context/auth-context';
 import Link from 'next/link';
 import { Loader2, Send, Search, MessageSquare, ArrowLeft, PlusCircle, X, Paperclip, File as FileIcon } from 'lucide-react';
 
-export default function MessagesPage() {
+function MessagesContent() {
     const { user } = useAuth();
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -468,4 +468,17 @@ export default function MessagesPage() {
             `}</style>
         </main>
     )
+}
+
+export default function MessagesPage() {
+    return (
+        <Suspense fallback={
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-primary)' }}>
+                <Loader2 className="spin" size={32} style={{ color: 'var(--primary)' }} />
+            </div>
+        }>
+            <MessagesContent />
+        </Suspense>
+    );
+}
 }

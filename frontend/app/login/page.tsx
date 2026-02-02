@@ -1,12 +1,12 @@
 "use client";
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { toast } from 'sonner';
 import { Loader2, ArrowLeft, AlertCircle } from 'lucide-react';
 
-export default function LoginPage() {
+function LoginContent() {
     const { login } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -140,5 +140,17 @@ export default function LoginPage() {
                 </p>
             </form>
         </div>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'radial-gradient(circle at top left, #2a2a40, #000)' }}>
+                <Loader2 className="spin" size={32} style={{ color: 'var(--primary)' }} />
+            </div>
+        }>
+            <LoginContent />
+        </Suspense>
     );
 }
