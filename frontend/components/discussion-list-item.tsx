@@ -1,6 +1,6 @@
 "use client";
 import Link from 'next/link';
-import { MessageSquare, Heart, Check, Pin, MoreHorizontal } from 'lucide-react';
+import { MessageSquare, Heart, Check, Pin, MoreHorizontal, CheckCircle2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface DiscussionListItemProps {
