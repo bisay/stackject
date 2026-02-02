@@ -53,7 +53,7 @@ async function bootstrap() {
             origin: corsOrigins.length > 0 ? corsOrigins : ['http://localhost:3000', 'http://localhost:3002'],
             credentials: true,
             methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
-            allowedHeaders: 'Content-Type, Accept, Authorization',
+            allowedHeaders: 'Content-Type, Accept, Authorization, x-setup-secret',
         });
 
         console.log("🟡 [DEBUG] Listening on 3001...");
