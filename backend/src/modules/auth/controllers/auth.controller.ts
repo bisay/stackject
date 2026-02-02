@@ -100,13 +100,17 @@ export class AuthController {
     }
 
     private setCookie(response: Response, token: string) {
+        const isProduction = process.env.NODE_ENV === 'production';
+        
         response.cookie('Authentication', token, {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+            secure: isProduction,
+            sameSite: isProduction ? 'none' : 'lax',
             path: '/',
             maxAge: 24 * 60 * 60 * 1000, // 1 day
-            domain: process.env.NODE_ENV === 'production' ? '.stackject.cloud' : undefined,
+            // Only set domain in production AND when accessed from stackject.cloud
+            // Don't set domain for localhost access
+            ...(isProduction ? { domain: '.stackject.cloud' } : {}),
         });
     }
 }
