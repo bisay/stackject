@@ -1,0 +1,262 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  username  String   @unique
+  password  String   
+  name      String?
+  avatarUrl String?
+  bio       String?
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects    Project[]    @relation("Owner")
+  discussions Discussion[]
+  discussionLikes DiscussionLike[]
+  comments    Comment[]
+  articles    Article[]
+  notifications Notification[]
+  commentLikes  CommentLike[]
+  projectLikes  ProjectLike[]
+  
+  followedProjects Project[] @relation("ProjectFollowers")
+
+  following Follows[] @relation("follower")
+  followers Follows[] @relation("following")
+  
+  sentMessages     Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+
+  @@map("users")
+}
+
+model Message {
+  id        String   @id @default(uuid())
+  content   String
+  
+  attachmentUrl String?
+  attachmentType String? // image, video, file
+
+  senderId  String
+  sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  receiverId String
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("messages")
+}
+
+model Follows {
+  followerId String
+  followingId String
+
+  follower User @relation("follower", fields: [followerId], references: [id])
+  following User @relation("following", fields: [followingId], references: [id])
+
+  @@id([followerId, followingId])
+  @@map("follows")
+}
+
+model Project {
+  id          String   @id @default(uuid())
+  slug        String
+  name        String
+  description String
+  status      String   @default("active")
+  
+  imageUrl    String?
+  repoUrl     String?
+  demoUrl     String?
+  tags        String[]
+  visibility  String   @default("public")
+  
+  ownerId     String
+  owner       User     @relation("Owner", fields: [ownerId], references: [id])
+  
+  discussions Discussion[]
+  followers   User[]       @relation("ProjectFollowers")
+  articles    Article[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  files       FileNode[] // Relation to file system
+  mentions    ProjectMention[]
+  likes       ProjectLike[]
+
+  @@unique([ownerId, slug])
+  @@map("projects")
+}
+
+model ProjectLike {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, projectId])
+  @@map("project_likes")
+}
+
+model FileNode {
+  id        String   @id @default(uuid())
+  name      String
+  path      String   // Full virtual path e.g. "src/components/Button.tsx"
+  size      Int
+  type      String   // "file" or "directory"
+  mimeType  String?
+  diskPath  String?  // Actual path on server disk (for files)
+  
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  parentId  String?
+  parent    FileNode?   @relation("DirectoryTree", fields: [parentId], references: [id], onDelete: Cascade)
+  children  FileNode[]  @relation("DirectoryTree")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("file_nodes")
+}
+
+model Discussion {
+  id        String   @id @default(uuid())
+  title     String
+  content   String   
+  
+  projectId String?
+  project   Project?  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  
+  tags      String[] 
+  
+  comments  Comment[]
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  mentions  ProjectMention[] 
+  likes     DiscussionLike[]
+  
+  @@map("discussions")
+}
+
+model Comment {
+  id           String     @id @default(uuid())
+  content      String
+  
+  discussionId String
+  discussion   Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  
+  authorId     String
+  author       User       @relation(fields: [authorId], references: [id])
+
+  parentId     String?
+  parent       Comment?   @relation("Thread", fields: [parentId], references: [id], onDelete: Cascade)
+  children     Comment[]  @relation("Thread")
+
+  mentions     ProjectMention[]
+  
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@map("comments")
+  likes        CommentLike[]
+}
+
+model CommentLike {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  commentId String
+  comment   Comment  @relation(fields: [commentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, commentId])
+  @@map("comment_likes")
+}
+
+model DiscussionLike {
+  id           String     @id @default(uuid())
+  userId       String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  discussionId String
+  discussion   Discussion @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+
+  @@unique([userId, discussionId])
+  @@map("discussion_likes")
+}
+
+model Article {
+  id        String   @id @default(uuid())
+  slug      String   @unique
+  title     String
+  content   String   // Markdown
+  published Boolean  @default(false)
+  
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id])
+  
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull) // Optional link to project
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("articles")
+}
+
+model ProjectMention {
+  id        String   @id @default(uuid())
+  
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  discussionId String?
+  discussion   Discussion? @relation(fields: [discussionId], references: [id], onDelete: Cascade)
+  
+  commentId    String?
+  comment      Comment? @relation(fields: [commentId], references: [id])
+  
+  createdAt DateTime @default(now())
+
+  @@map("project_mentions")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String   // Recipient
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type      String   // 'MENTION', 'REPLY', 'SYSTEM'
+  message   String
+  link      String?  // /project/slug or /discussion/id
+  read      Boolean  @default(false)
+  
+  createdAt DateTime @default(now())
+
+  @@map("notifications")
+}
