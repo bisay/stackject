@@ -65,17 +65,24 @@ async function proxyRequest(request: NextRequest, pathSegments: string[], method
             method,
             headers,
             body,
+            credentials: 'include',
         });
         
         const data = await response.text();
         
         const responseHeaders = new Headers();
         
-        // Forward Set-Cookie headers
-        const setCookie = response.headers.get('set-cookie');
-        if (setCookie) {
-            responseHeaders.set('Set-Cookie', setCookie);
-        }
+        // Forward ALL Set-Cookie headers (there might be multiple)
+        response.headers.forEach((value, key) => {
+            if (key.toLowerCase() === 'set-cookie') {
+                // Modify cookie to work on same domain (remove domain restriction)
+                const modifiedCookie = value
+                    .replace(/Domain=[^;]+;?/gi, '')
+                    .replace(/SameSite=none/gi, 'SameSite=Lax')
+                    .replace(/Secure;?/gi, '');
+                responseHeaders.append('Set-Cookie', modifiedCookie);
+            }
+        });
         
         responseHeaders.set('Content-Type', response.headers.get('content-type') || 'application/json');
         
