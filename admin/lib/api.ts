@@ -1,15 +1,15 @@
 import axios from 'axios';
 
-// In production, use the Next.js API proxy to avoid cross-domain cookie issues
-// In development, call backend directly
+// Always use the backend API directly
+// Cookie sharing works because both use .stackject.cloud domain
 const getApiUrl = () => {
     if (typeof window !== 'undefined') {
         const host = window.location.hostname;
         if (host === 'localhost' || host === '127.0.0.1') {
             return 'http://localhost:3001';
         }
-        // Production: use Next.js API proxy (same-origin)
-        return '/api';
+        // Production: call backend directly
+        return 'https://api-backend-prod.stackject.cloud';
     }
     // Server-side: use env or default
     return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
