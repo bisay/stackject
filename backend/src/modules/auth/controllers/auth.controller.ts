@@ -83,7 +83,13 @@ export class AuthController {
 
     @Post('logout')
     async logout(@Res({ passthrough: true }) response: Response) {
-        response.clearCookie('Authentication');
+        response.clearCookie('Authentication', {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+            path: '/',
+            domain: process.env.NODE_ENV === 'production' ? '.stackject.cloud' : undefined,
+        });
         return { message: 'Logged out' };
     }
 
@@ -97,9 +103,10 @@ export class AuthController {
         response.cookie('Authentication', token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
             path: '/',
             maxAge: 24 * 60 * 60 * 1000, // 1 day
+            domain: process.env.NODE_ENV === 'production' ? '.stackject.cloud' : undefined,
         });
     }
 }
