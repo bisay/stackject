@@ -11,12 +11,34 @@ export default function RegisterPage() {
     const [email, setEmail] = useState('');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
     const [avatar, setAvatar] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 
+    // Password validation
+    const hasUpperCase = /[A-Z]/.test(password);
+    const hasLowerCase = /[a-z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasMinLength = password.length >= 8;
+    const passwordsMatch = password === confirmPassword && confirmPassword !== '';
+    const isPasswordValid = hasUpperCase && hasLowerCase && hasNumber && hasMinLength;
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        
+        // Validate password requirements
+        if (!isPasswordValid) {
+            toast.error("Password doesn't meet requirements");
+            return;
+        }
+        
+        // Check if passwords match
+        if (!passwordsMatch) {
+            toast.error("Passwords don't match");
+            return;
+        }
+        
         setLoading(true);
         try {
             const formData = new FormData();
@@ -129,9 +151,58 @@ export default function RegisterPage() {
                         required
                         minLength={8}
                     />
+                    {/* Password Requirements */}
+                    <div style={{ marginTop: '8px', fontSize: '0.75rem' }}>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '4px' }}>Password must contain:</p>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                            <span style={{ color: hasMinLength ? '#10b981' : 'var(--text-muted)' }}>
+                                {hasMinLength ? '✓' : '○'} At least 8 characters
+                            </span>
+                            <span style={{ color: hasUpperCase ? '#10b981' : 'var(--text-muted)' }}>
+                                {hasUpperCase ? '✓' : '○'} One uppercase letter (A-Z)
+                            </span>
+                            <span style={{ color: hasLowerCase ? '#10b981' : 'var(--text-muted)' }}>
+                                {hasLowerCase ? '✓' : '○'} One lowercase letter (a-z)
+                            </span>
+                            <span style={{ color: hasNumber ? '#10b981' : 'var(--text-muted)' }}>
+                                {hasNumber ? '✓' : '○'} One number (0-9)
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
-                <button type="submit" disabled={loading} className="btn-primary" style={{ padding: '14px', marginTop: '1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                <div>
+                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.9rem' }}>Confirm Password</label>
+                    <input
+                        type="password"
+                        placeholder="••••••••"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        style={{ 
+                            width: '100%', 
+                            padding: '12px', 
+                            borderRadius: '8px', 
+                            border: `1px solid ${confirmPassword && !passwordsMatch ? '#ef4444' : 'var(--glass-border)'}`, 
+                            background: 'rgba(255,255,255,0.05)', 
+                            color: 'white', 
+                            outline: 'none' 
+                        }}
+                        required
+                        minLength={8}
+                    />
+                    {confirmPassword && !passwordsMatch && (
+                        <p style={{ fontSize: '0.75rem', color: '#ef4444', marginTop: '4px' }}>
+                            Passwords do not match
+                        </p>
+                    )}
+                    {passwordsMatch && (
+                        <p style={{ fontSize: '0.75rem', color: '#10b981', marginTop: '4px' }}>
+                            ✓ Passwords match
+                        </p>
+                    )}
+                </div>
+
+                <button type="submit" disabled={loading || !isPasswordValid || !passwordsMatch} className="btn-primary" style={{ padding: '14px', marginTop: '1rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', opacity: (!isPasswordValid || !passwordsMatch) ? 0.6 : 1 }}>
                     {loading ? <Loader2 className="spin" /> : 'Create Account'}
                 </button>
 

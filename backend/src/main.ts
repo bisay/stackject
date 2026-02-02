@@ -23,22 +23,29 @@ async function bootstrap() {
             contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
         }));
 
-        // Build CORS origins list
-        const corsOrigins: string[] = [];
+        // Build CORS origins list - include both dev and production
+        const corsOrigins: string[] = [
+            // Development URLs
+            'http://localhost:3000',
+            'http://localhost:3002',
+            // Production URLs
+            'https://stackject.cloud',
+            'https://admin-dashboard.stackject.cloud',
+            'https://api-backend-prod.stackject.cloud',
+        ];
         
-        // Always add configured frontend URL
-        if (process.env.FRONTEND_URL) {
+        // Add configured URLs from env (if different)
+        if (process.env.FRONTEND_URL && !corsOrigins.includes(process.env.FRONTEND_URL)) {
             corsOrigins.push(process.env.FRONTEND_URL);
         }
-        
-        // Always add configured admin URL
-        if (process.env.ADMIN_URL) {
+        if (process.env.ADMIN_URL && !corsOrigins.includes(process.env.ADMIN_URL)) {
             corsOrigins.push(process.env.ADMIN_URL);
         }
-        
-        // In development, add localhost fallbacks
-        if (process.env.NODE_ENV !== 'production') {
-            corsOrigins.push('http://localhost:3000', 'http://localhost:3002');
+        if (process.env.FRONTEND_URL_PROD && !corsOrigins.includes(process.env.FRONTEND_URL_PROD)) {
+            corsOrigins.push(process.env.FRONTEND_URL_PROD);
+        }
+        if (process.env.ADMIN_URL_PROD && !corsOrigins.includes(process.env.ADMIN_URL_PROD)) {
+            corsOrigins.push(process.env.ADMIN_URL_PROD);
         }
 
         // Enable CORS for frontend

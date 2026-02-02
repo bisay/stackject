@@ -5,7 +5,7 @@ import Link from 'next/link';
 import api from '@/lib/api';
 import Navbar from '@/components/navbar';
 import { useAuth } from '@/context/auth-context';
-import { Share2, MoreHorizontal, Github, ExternalLink, Heart, MessageSquare, ArrowLeft, Plus, X, Code, Layers, BadgeCheck, Sparkles, Link2, Check } from 'lucide-react';
+import { Share2, MoreHorizontal, Github, ExternalLink, Heart, MessageSquare, ArrowLeft, Plus, X, Code, Layers, BadgeCheck, Sparkles, Link2, Check, Download, Users, History, FileText, FilePlus, FileEdit, RefreshCw } from 'lucide-react';
 import FileExplorer from '@/components/file-explorer';
 import EditProjectModal from '@/components/edit-project-modal';
 import DiscussionListItem from '@/components/discussion-list-item';
@@ -44,6 +44,19 @@ interface Discussion {
     };
 }
 
+interface ChangeLog {
+    id: string;
+    fileName: string;
+    filePath: string;
+    changeType: 'ADD' | 'UPDATE' | 'REPLACE';
+    description?: string;
+    createdAt: string;
+    changedBy?: {
+        name: string;
+        username: string;
+    };
+}
+
 import NewDiscussionModal from '@/components/new-discussion-modal';
 import DiscussionDetail from '@/components/discussion-detail';
 
@@ -60,7 +73,7 @@ export default function ProjectDetailView() {
     const [project, setProject] = useState<Project | null>(null);
     const [discussions, setDiscussions] = useState<Discussion[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'files' | 'discussions'>('files');
+    const [activeTab, setActiveTab] = useState<'files' | 'downloads' | 'history' | 'discussions'>('files');
     const [isEditOpen, setIsEditOpen] = useState(false);
     const [isNewDiscussionOpen, setIsNewDiscussionOpen] = useState(false);
     const [selectedDiscussionId, setSelectedDiscussionId] = useState<string | null>(null); // New state for inline view
@@ -70,6 +83,16 @@ export default function ProjectDetailView() {
     const [likesCount, setLikesCount] = useState(0);
     const [likeLoading, setLikeLoading] = useState(false);
     const [copied, setCopied] = useState(false);
+    
+    // Downloads state
+    const [downloads, setDownloads] = useState<any[]>([]);
+    const [downloadsCount, setDownloadsCount] = useState(0);
+    const [uniqueDownloaders, setUniqueDownloaders] = useState(0);
+    const [downloadsLoading, setDownloadsLoading] = useState(false);
+    
+    // Change logs state
+    const [changeLogs, setChangeLogs] = useState<ChangeLog[]>([]);
+    const [changeLogsLoading, setChangeLogsLoading] = useState(false);
 
     const fetchData = async () => {
         if (!username || !slug) return;
@@ -104,6 +127,12 @@ export default function ProjectDetailView() {
                     _count: d._count || { comments: d.comments ? d.comments.length : 0 }
                 }));
                 setDiscussions(mappedDiscussions);
+                
+                // Fetch downloads
+                fetchDownloads(projectRes.data.id);
+                
+                // Fetch change logs
+                fetchChangeLogs(projectRes.data.id);
             } else {
                 setDiscussions([]);
             }
@@ -111,6 +140,32 @@ export default function ProjectDetailView() {
             console.error("Failed to load project", err);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const fetchDownloads = async (projectId: string) => {
+        try {
+            setDownloadsLoading(true);
+            const res = await api.get(`/files/projects/${projectId}/downloads`);
+            setDownloads(res.data.downloads || []);
+            setDownloadsCount(res.data.totalCount || 0);
+            setUniqueDownloaders(res.data.uniqueDownloaders || 0);
+        } catch (err) {
+            console.error("Failed to load downloads", err);
+        } finally {
+            setDownloadsLoading(false);
+        }
+    };
+
+    const fetchChangeLogs = async (projectId: string) => {
+        try {
+            setChangeLogsLoading(true);
+            const res = await api.get(`/files/projects/${projectId}/change-logs`);
+            setChangeLogs(res.data || []);
+        } catch (err) {
+            console.error("Failed to load change logs", err);
+        } finally {
+            setChangeLogsLoading(false);
         }
     };
 
@@ -420,12 +475,24 @@ export default function ProjectDetailView() {
                 {/* Tabs */}
                 {/* Hide tabs if viewing a specific discussion to reduce clutter, or keep them? Keeping them might be confusing. */}
                 {!selectedDiscussionId && (
-                    <div style={{ display: 'flex', gap: '2rem', borderBottom: '1px solid var(--glass-border)', marginBottom: '2rem', paddingBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', gap: '2rem', borderBottom: '1px solid var(--glass-border)', marginBottom: '2rem', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
                         <button
                             onClick={() => setActiveTab('files')}
                             style={{ background: 'none', border: 'none', fontSize: '1.1rem', fontWeight: activeTab === 'files' ? 600 : 400, color: activeTab === 'files' ? 'var(--primary)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '0.5rem', borderBottom: activeTab === 'files' ? '2px solid var(--primary)' : '2px solid transparent' }}
                         >
                             <Code size={18} /> Codebase
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('downloads')}
+                            style={{ background: 'none', border: 'none', fontSize: '1.1rem', fontWeight: activeTab === 'downloads' ? 600 : 400, color: activeTab === 'downloads' ? 'var(--primary)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '0.5rem', borderBottom: activeTab === 'downloads' ? '2px solid var(--primary)' : '2px solid transparent' }}
+                        >
+                            <Download size={18} /> Downloads ({uniqueDownloaders})
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('history')}
+                            style={{ background: 'none', border: 'none', fontSize: '1.1rem', fontWeight: activeTab === 'history' ? 600 : 400, color: activeTab === 'history' ? 'var(--primary)' : 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', paddingBottom: '0.5rem', borderBottom: activeTab === 'history' ? '2px solid var(--primary)' : '2px solid transparent' }}
+                        >
+                            <History size={18} /> Riwayat ({changeLogs.length})
                         </button>
                         <button
                             onClick={() => setActiveTab('discussions')}
@@ -439,7 +506,233 @@ export default function ProjectDetailView() {
                 {/* Content */}
                 {activeTab === 'files' && !selectedDiscussionId && (
                     <div>
-                        <FileExplorer projectId={project.id} isOwner={isOwner} />
+                        <FileExplorer 
+                            projectId={project.id} 
+                            isOwner={isOwner} 
+                            onFilesChanged={() => fetchChangeLogs(project.id)}
+                        />
+                    </div>
+                )}
+
+                {activeTab === 'downloads' && !selectedDiscussionId && (
+                    <div>
+                        <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <Users size={24} /> Download History
+                            </h2>
+                            <div style={{ 
+                                display: 'flex', 
+                                gap: '1.5rem',
+                                color: 'var(--text-muted)',
+                                fontSize: '0.9rem'
+                            }}>
+                                <span><strong style={{ color: 'var(--primary)' }}>{downloadsCount}</strong> total downloads</span>
+                                <span><strong style={{ color: 'var(--primary)' }}>{uniqueDownloaders}</strong> unique users</span>
+                            </div>
+                        </div>
+
+                        <div className="glass-card" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
+                            {downloadsLoading ? (
+                                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                                    Loading downloads...
+                                </div>
+                            ) : downloads.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
+                                        <Download size={32} color="var(--primary)" />
+                                    </div>
+                                    <h3 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-main)' }}>No downloads yet</h3>
+                                    <p>Be the first to download this project!</p>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    {downloads.map((download, index) => (
+                                        <Link
+                                            key={download.id}
+                                            href={`/c/${download.user.username}`}
+                                            style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'center', 
+                                                gap: '1rem',
+                                                padding: '1rem 1.5rem',
+                                                borderBottom: index < downloads.length - 1 ? '1px solid var(--glass-border)' : 'none',
+                                                textDecoration: 'none',
+                                                color: 'inherit',
+                                                transition: 'background 0.2s ease'
+                                            }}
+                                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(99, 102, 241, 0.05)'}
+                                            onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
+                                        >
+                                            <div style={{
+                                                width: '48px',
+                                                height: '48px',
+                                                borderRadius: '50%',
+                                                background: download.user.avatarUrl 
+                                                    ? `url(${download.user.avatarUrl.startsWith('http') ? download.user.avatarUrl : `http://localhost:3001${download.user.avatarUrl}`}) center/cover`
+                                                    : 'linear-gradient(135deg, var(--primary), var(--accent))',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                color: 'white',
+                                                fontWeight: 700,
+                                                fontSize: '1.1rem',
+                                                flexShrink: 0
+                                            }}>
+                                                {!download.user.avatarUrl && (download.user.name?.[0] || download.user.username[0]).toUpperCase()}
+                                            </div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ fontWeight: 600, color: 'var(--text-main)', marginBottom: '2px' }}>
+                                                    {download.user.name || download.user.username}
+                                                </div>
+                                                <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                                                    @{download.user.username}
+                                                </div>
+                                            </div>
+                                            <div style={{ 
+                                                fontSize: '0.8rem', 
+                                                color: 'var(--text-muted)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '0.5rem',
+                                                flexShrink: 0
+                                            }}>
+                                                <Download size={14} />
+                                                {new Date(download.createdAt).toLocaleDateString('id-ID', {
+                                                    day: 'numeric',
+                                                    month: 'short',
+                                                    year: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                )}
+
+                {activeTab === 'history' && !selectedDiscussionId && (
+                    <div>
+                        <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <h2 style={{ fontSize: '1.5rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                                <History size={24} /> Riwayat Perubahan
+                            </h2>
+                        </div>
+
+                        <div className="glass-card" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--glass-border)' }}>
+                            {changeLogsLoading ? (
+                                <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                                    Loading riwayat...
+                                </div>
+                            ) : changeLogs.length === 0 ? (
+                                <div style={{ textAlign: 'center', padding: '4rem 2rem', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                                    <div style={{ width: '64px', height: '64px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '1.5rem' }}>
+                                        <History size={32} color="var(--primary)" />
+                                    </div>
+                                    <h3 style={{ fontSize: '1.2rem', fontWeight: 600, marginBottom: '0.5rem', color: 'var(--text-main)' }}>Belum ada riwayat perubahan</h3>
+                                    <p>Perubahan file akan tercatat di sini</p>
+                                </div>
+                            ) : (
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    {changeLogs.map((log, index) => (
+                                        <div
+                                            key={log.id}
+                                            style={{ 
+                                                display: 'flex', 
+                                                alignItems: 'flex-start', 
+                                                gap: '1rem',
+                                                padding: '1rem 1.5rem',
+                                                borderBottom: index < changeLogs.length - 1 ? '1px solid var(--glass-border)' : 'none',
+                                            }}
+                                        >
+                                            <div style={{
+                                                width: '40px',
+                                                height: '40px',
+                                                borderRadius: '10px',
+                                                background: log.changeType === 'ADD' 
+                                                    ? 'rgba(34, 197, 94, 0.15)' 
+                                                    : log.changeType === 'REPLACE' 
+                                                        ? 'rgba(251, 146, 60, 0.15)' 
+                                                        : 'rgba(99, 102, 241, 0.15)',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                justifyContent: 'center',
+                                                flexShrink: 0
+                                            }}>
+                                                {log.changeType === 'ADD' && <FilePlus size={20} color="#22c55e" />}
+                                                {log.changeType === 'REPLACE' && <RefreshCw size={20} color="#fb923c" />}
+                                                {log.changeType === 'UPDATE' && <FileEdit size={20} color="var(--primary)" />}
+                                            </div>
+                                            <div style={{ flex: 1, minWidth: 0 }}>
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '4px', flexWrap: 'wrap' }}>
+                                                    <span style={{ 
+                                                        fontWeight: 600, 
+                                                        color: 'var(--text-main)',
+                                                        fontFamily: 'monospace',
+                                                        fontSize: '0.9rem',
+                                                        background: 'rgba(99, 102, 241, 0.1)',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '4px'
+                                                    }}>
+                                                        {log.fileName}
+                                                    </span>
+                                                    <span style={{
+                                                        fontSize: '0.75rem',
+                                                        padding: '2px 8px',
+                                                        borderRadius: '12px',
+                                                        background: log.changeType === 'ADD' 
+                                                            ? 'rgba(34, 197, 94, 0.2)' 
+                                                            : log.changeType === 'REPLACE' 
+                                                                ? 'rgba(251, 146, 60, 0.2)' 
+                                                                : 'rgba(99, 102, 241, 0.2)',
+                                                        color: log.changeType === 'ADD' 
+                                                            ? '#22c55e' 
+                                                            : log.changeType === 'REPLACE' 
+                                                                ? '#fb923c' 
+                                                                : 'var(--primary)',
+                                                        fontWeight: 600
+                                                    }}>
+                                                        {log.changeType === 'ADD' ? 'File Baru' : log.changeType === 'REPLACE' ? 'Ditimpa' : 'Diperbarui'}
+                                                    </span>
+                                                </div>
+                                                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '4px' }}>
+                                                    {log.filePath}
+                                                </div>
+                                                {log.description && (
+                                                    <div style={{ 
+                                                        fontSize: '0.85rem', 
+                                                        color: 'var(--text-main)',
+                                                        fontStyle: 'italic',
+                                                        marginTop: '6px'
+                                                    }}>
+                                                        "{log.description}"
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div style={{ 
+                                                fontSize: '0.75rem', 
+                                                color: 'var(--text-muted)',
+                                                flexShrink: 0,
+                                                textAlign: 'right'
+                                            }}>
+                                                {new Date(log.createdAt).toLocaleDateString('id-ID', {
+                                                    day: 'numeric',
+                                                    month: 'short',
+                                                    year: 'numeric'
+                                                })}
+                                                <br />
+                                                {new Date(log.createdAt).toLocaleTimeString('id-ID', {
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
 

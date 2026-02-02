@@ -1,17 +1,29 @@
 "use client";
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { toast } from 'sonner';
-import { Loader2, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft, AlertCircle } from 'lucide-react';
 
 export default function LoginPage() {
     const { login } = useAuth();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [loading, setLoading] = useState(false);
+    const searchParams = useSearchParams();
+    
+    const message = searchParams.get('message');
+    const returnUrl = searchParams.get('returnUrl');
 
     const router = require('next/navigation').useRouter();
+    
+    // Show message on mount
+    useEffect(() => {
+        if (message === 'login_required') {
+            toast.info('Silakan login terlebih dahulu untuk mendownload file');
+        }
+    }, [message]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -23,7 +35,15 @@ export default function LoginPage() {
             toast.success("Welcome back! 👋 Redirection initiated...");
             console.log("🟢 Login Successful in Component");
 
-            // Force redirection
+            // Check if there's a return URL (from download redirect)
+            if (returnUrl) {
+                // Redirect to the download URL
+                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+                window.location.href = `${apiUrl}${decodeURIComponent(returnUrl)}`;
+                return;
+            }
+
+            // Force redirection to dashboard
             router.push('/dashboard');
 
             // Fallback if router fails (common in some Next.js edge cases with context)
@@ -61,6 +81,26 @@ export default function LoginPage() {
             </Link>
 
             <form onSubmit={handleSubmit} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '3rem', display: 'flex', flexDirection: 'column', gap: '1.5rem', border: '1px solid var(--glass-border)' }}>
+                
+                {/* Login Required Message */}
+                {message === 'login_required' && (
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.75rem',
+                        padding: '1rem',
+                        background: 'rgba(251, 146, 60, 0.15)',
+                        border: '1px solid rgba(251, 146, 60, 0.3)',
+                        borderRadius: '10px',
+                        color: '#fb923c'
+                    }}>
+                        <AlertCircle size={20} />
+                        <div style={{ fontSize: '0.9rem' }}>
+                            Silakan login untuk mendownload file
+                        </div>
+                    </div>
+                )}
+                
                 <div style={{ textAlign: 'center', marginBottom: '1rem' }}>
                     <img src="/logo.png" alt="Stackject" style={{ width: '64px', height: '64px', margin: '0 auto 1rem auto', objectFit: 'contain' }} />
                     <h1 style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>Welcome Back</h1>

@@ -1,10 +1,14 @@
 "use client";
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useDropzone } from 'react-dropzone';
-import { Folder, FileCode, UploadCloud, ChevronRight, ChevronDown, Loader2, Download, Image as ImageIcon, MoreVertical, Edit2, Trash2, Pencil } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Folder, FileCode, UploadCloud, ChevronRight, ChevronDown, Loader2, Download, Image as ImageIcon, MoreVertical, Edit2, Trash2, Pencil, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import CodeViewer from './code-viewer';
+import { useAuth } from '@/context/auth-context';
+import DuplicateFileModal from './duplicate-file-modal';
+import UploadDescriptionModal from './upload-description-modal';
 
 interface FileNode {
     id: string;
@@ -16,11 +20,29 @@ interface FileNode {
     path: string;
 }
 
-export default function FileExplorer({ projectId, isOwner }: { projectId: string, isOwner: boolean }) {
+interface DuplicateFileInfo {
+    file: File;
+    filePath: string;
+}
+
+export default function FileExplorer({ projectId, isOwner, onFilesChanged }: { projectId: string, isOwner: boolean, onFilesChanged?: () => void }) {
+    const { user } = useAuth();
+    const router = useRouter();
     const [files, setFiles] = useState<FileNode[]>([]);
     const [breadcrumbs, setBreadcrumbs] = useState<{ id: string, name: string }[]>([]);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [showLoginModal, setShowLoginModal] = useState(false);
+    
+    // Duplicate file modal state
+    const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+    const [duplicateFile, setDuplicateFile] = useState<DuplicateFileInfo | null>(null);
+    const [pendingFiles, setPendingFiles] = useState<DuplicateFileInfo[]>([]);
+    
+    // Upload description modal state
+    const [descriptionModalOpen, setDescriptionModalOpen] = useState(false);
+    const [pendingUploadFiles, setPendingUploadFiles] = useState<DuplicateFileInfo[]>([]);
+    const [uploadDescription, setUploadDescription] = useState('');
 
     // Viewer State
     const [viewingFile, setViewingFile] = useState<{ name: string, content: string, type?: string, path?: string } | null>(null);
@@ -102,7 +124,6 @@ export default function FileExplorer({ projectId, isOwner }: { projectId: string
 
     const onDrop = async (acceptedFiles: File[], fileRejections: any[], event: any) => {
         if (!isOwner) return;
-        setUploading(true);
         let filesToUpload: File[] = [];
 
         const items = event.dataTransfer ? event.dataTransfer.items : null;
@@ -117,18 +138,149 @@ export default function FileExplorer({ projectId, isOwner }: { projectId: string
             filesToUpload = acceptedFiles;
         }
 
-        for (const file of filesToUpload) {
-            const form = new FormData();
-            form.append('file', file);
-            const relativePath = (file as any).path || (file as any).webkitRelativePath || file.name;
-            form.append('filePath', relativePath);
+        // Prepare files for upload
+        const filesToProcess: DuplicateFileInfo[] = filesToUpload.map(file => ({
+            file,
+            filePath: (file as any).path || (file as any).webkitRelativePath || file.name
+        }));
+        
+        // Store files and show description modal
+        setPendingUploadFiles(filesToProcess);
+        setDescriptionModalOpen(true);
+    };
+    
+    // Handle description modal submit
+    const handleDescriptionSubmit = async (description: string, changeType: string) => {
+        setDescriptionModalOpen(false);
+        setUploadDescription(description);
+        setUploading(true);
+        
+        await processFileUpload(pendingUploadFiles, description);
+        
+        setPendingUploadFiles([]);
+        setUploading(false);
+        const currentParentId = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].id : undefined;
+        fetchFiles(currentParentId);
+        
+        // Notify parent that files changed
+        if (onFilesChanged) onFilesChanged();
+    };
+    
+    // Handle description modal close
+    const handleDescriptionCancel = () => {
+        setDescriptionModalOpen(false);
+        setPendingUploadFiles([]);
+    };
+    
+    // Helper function to process file uploads with duplicate detection
+    const processFileUpload = async (filesToProcess: DuplicateFileInfo[], description: string = '') => {
+        for (let i = 0; i < filesToProcess.length; i++) {
+            const { file, filePath } = filesToProcess[i];
+            
             try {
-                await api.post(`/files/projects/${projectId}/upload`, form);
+                // Check for duplicate first
+                const checkRes = await api.get(`/files/projects/${projectId}/check-duplicate`, {
+                    params: { filePath }
+                });
+                
+                if (checkRes.data.exists) {
+                    // Store remaining files and show modal
+                    setPendingFiles(filesToProcess.slice(i + 1));
+                    setDuplicateFile({ file, filePath });
+                    setDuplicateModalOpen(true);
+                    return; // Stop processing, will continue after user decision
+                }
+                
+                // No duplicate, upload normally
+                await uploadFileWithMode(file, filePath, 'replace', description);
             } catch (e) {
                 toast.error(`Failed to upload ${file.name}`);
             }
         }
+    };
+    
+    // Upload file with specific mode
+    const uploadFileWithMode = async (file: File, filePath: string, replaceMode: 'replace' | 'keep-both', description: string = '') => {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('filePath', filePath);
+        form.append('replaceMode', replaceMode);
+        form.append('description', description);
+        
+        try {
+            await api.post(`/files/projects/${projectId}/upload`, form);
+        } catch (e) {
+            throw e;
+        }
+    };
+    
+    // Handle duplicate file replace
+    const handleDuplicateReplace = async () => {
+        if (!duplicateFile) return;
+        
+        try {
+            await uploadFileWithMode(duplicateFile.file, duplicateFile.filePath, 'replace', uploadDescription);
+            toast.success(`File ${duplicateFile.file.name} berhasil ditimpa`);
+        } catch (e) {
+            toast.error(`Failed to replace ${duplicateFile.file.name}`);
+        }
+        
+        setDuplicateModalOpen(false);
+        setDuplicateFile(null);
+        
+        // Continue processing remaining files
+        if (pendingFiles.length > 0) {
+            await processFileUpload(pendingFiles, uploadDescription);
+            setPendingFiles([]);
+        }
+        
+        // Refresh files
+        const currentParentId = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].id : undefined;
+        fetchFiles(currentParentId);
         setUploading(false);
+        
+        // Notify parent that files changed
+        if (onFilesChanged) onFilesChanged();
+    };
+    
+    // Handle keep both files
+    const handleDuplicateKeepBoth = async () => {
+        if (!duplicateFile) return;
+        
+        try {
+            await uploadFileWithMode(duplicateFile.file, duplicateFile.filePath, 'keep-both', uploadDescription);
+            toast.success(`File ${duplicateFile.file.name} disimpan dengan nama baru`);
+        } catch (e) {
+            toast.error(`Failed to upload ${duplicateFile.file.name}`);
+        }
+        
+        setDuplicateModalOpen(false);
+        setDuplicateFile(null);
+        
+        // Continue processing remaining files
+        if (pendingFiles.length > 0) {
+            await processFileUpload(pendingFiles, uploadDescription);
+            setPendingFiles([]);
+        }
+        
+        // Refresh files
+        const currentParentId = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].id : undefined;
+        fetchFiles(currentParentId);
+        setUploading(false);
+        
+        // Notify parent that files changed
+        if (onFilesChanged) onFilesChanged();
+    };
+    
+    // Handle cancel duplicate modal
+    const handleDuplicateCancel = () => {
+        setDuplicateModalOpen(false);
+        setDuplicateFile(null);
+        setPendingFiles([]);
+        setUploadDescription('');
+        setUploading(false);
+        
+        // Refresh files
         const currentParentId = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].id : undefined;
         fetchFiles(currentParentId);
     };
@@ -142,6 +294,12 @@ export default function FileExplorer({ projectId, isOwner }: { projectId: string
 
     // File Management Actions
     const handleDownloadZip = () => {
+        // Check if user is logged in
+        if (!user) {
+            setShowLoginModal(true);
+            return;
+        }
+        
         // Direct download link
         window.open(`http://localhost:3001/files/projects/${projectId}/download`, '_blank');
     };
@@ -321,6 +479,107 @@ export default function FileExplorer({ projectId, isOwner }: { projectId: string
                 isEditable={isOwner}
                 onSave={handleSaveFile}
             />
+
+            {/* Login Modal */}
+            {showLoginModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'rgba(0,0,0,0.6)',
+                    backdropFilter: 'blur(5px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999
+                }} onClick={() => setShowLoginModal(false)}>
+                    <div
+                        className="glass-card"
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                            width: '400px',
+                            padding: '2rem',
+                            borderRadius: '16px',
+                            border: '1px solid var(--glass-border)',
+                            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+                        }}
+                    >
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: '1rem' }}>
+                            <div style={{
+                                width: '60px',
+                                height: '60px',
+                                borderRadius: '50%',
+                                background: 'rgba(99, 102, 241, 0.1)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                marginBottom: '0.5rem'
+                            }}>
+                                <LogIn size={32} style={{ color: '#6366f1' }} />
+                            </div>
+
+                            <h2 style={{ margin: 0, fontSize: '1.5rem' }}>Login Required</h2>
+                            <p style={{ margin: 0, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+                                You need to be logged in to download project files. Please login to continue.
+                            </p>
+
+                            <div style={{ display: 'flex', gap: '1rem', marginTop: '1.5rem', width: '100%' }}>
+                                <button
+                                    className="btn-ghost"
+                                    onClick={() => setShowLoginModal(false)}
+                                    style={{ flex: 1, justifyContent: 'center' }}
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        router.push('/login');
+                                        setShowLoginModal(false);
+                                    }}
+                                    style={{
+                                        flex: 1,
+                                        display: 'flex',
+                                        justifyContent: 'center',
+                                        alignItems: 'center',
+                                        gap: '8px',
+                                        background: 'linear-gradient(135deg, #6366f1 0%, #a855f7 100%)',
+                                        border: '1px solid #6366f1',
+                                        color: 'white',
+                                        borderRadius: '8px',
+                                        padding: '10px',
+                                        fontWeight: 600,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.2s'
+                                    }}
+                                >
+                                    <LogIn size={16} />
+                                    Login
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+            
+            {/* Duplicate File Modal */}
+            <DuplicateFileModal
+                isOpen={duplicateModalOpen}
+                fileName={duplicateFile?.file.name || ''}
+                filePath={duplicateFile?.filePath || ''}
+                onClose={handleDuplicateCancel}
+                onReplace={handleDuplicateReplace}
+                onKeepBoth={handleDuplicateKeepBoth}
+            />
+            
+            {/* Upload Description Modal */}
+            <UploadDescriptionModal
+                isOpen={descriptionModalOpen}
+                filesCount={pendingUploadFiles.length}
+                onClose={handleDescriptionCancel}
+                onSubmit={handleDescriptionSubmit}
+            />
         </>
     );
 }
@@ -400,7 +659,7 @@ function FileRow({ node, onClick, isOwner, onRename, onDelete, onDownload, onEdi
                 </div>
             )}
         </div>
-    )
+    );
 }
 
 function formatBytes(bytes: number, decimals = 2) {

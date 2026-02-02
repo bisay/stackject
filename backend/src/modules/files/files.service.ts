@@ -42,14 +42,76 @@ export class FilesService {
         }
     }
 
-    async uploadFile(projectId: string, file: Express.Multer.File, filePath: string) {
+    async checkDuplicateFile(projectId: string, filePath: string) {
+        const normalizedPath = filePath.replace(/\\/g, '/');
+        const existingFile = await this.prisma.fileNode.findFirst({
+            where: { 
+                projectId, 
+                path: normalizedPath,
+                type: 'file'
+            }
+        });
+        
+        return {
+            exists: !!existingFile,
+            file: existingFile ? { id: existingFile.id, name: existingFile.name, path: existingFile.path } : null
+        };
+    }
+
+    async uploadFile(
+        projectId: string, 
+        file: Express.Multer.File, 
+        filePath: string,
+        options?: { userId?: string, description?: string, replaceMode?: string }
+    ) {
         console.log(`🔧 Service: Processing File ${file.originalname} for Project ${projectId}`);
         // filePath example: "src/components/Header.tsx" or just "Header.tsx"
         // Normalize path separators
         const normalizedPath = filePath.replace(/\\/g, '/');
         const parts = normalizedPath.split('/').filter(p => p !== '.' && p !== '');
-        const fileName = parts.pop()!; // Last part is filename
+        let fileName = parts.pop()!; // Last part is filename
         const directories = parts; // Remaining are directories
+
+        // Check for duplicate
+        const existingFile = await this.prisma.fileNode.findFirst({
+            where: { projectId, path: normalizedPath, type: 'file' }
+        });
+
+        let changeType = 'ADD';
+        let finalPath = normalizedPath;
+
+        if (existingFile) {
+            if (options?.replaceMode === 'replace') {
+                // Delete old file
+                changeType = 'REPLACE';
+                await this.prisma.fileNode.delete({ where: { id: existingFile.id } });
+            } else if (options?.replaceMode === 'keep-both') {
+                // Add (2) to filename
+                changeType = 'ADD';
+                const ext = fileName.includes('.') ? '.' + fileName.split('.').pop() : '';
+                const baseName = fileName.replace(ext, '');
+                
+                // Find next available number
+                let counter = 2;
+                let newFileName = `${baseName} (${counter})${ext}`;
+                let newPath = [...directories, newFileName].join('/');
+                
+                while (await this.prisma.fileNode.findFirst({ where: { projectId, path: newPath, type: 'file' } })) {
+                    counter++;
+                    newFileName = `${baseName} (${counter})${ext}`;
+                    newPath = [...directories, newFileName].join('/');
+                }
+                
+                fileName = newFileName;
+                finalPath = newPath;
+            } else {
+                // Return duplicate error - frontend should ask user
+                return { 
+                    duplicate: true, 
+                    existingFile: { id: existingFile.id, name: existingFile.name, path: existingFile.path }
+                };
+            }
+        }
 
         let parentId: string | null = null;
 
@@ -85,17 +147,84 @@ export class FilesService {
                     size: file.size,
                     mimeType: file.mimetype,
                     diskPath: file.path,
-                    path: normalizedPath,
+                    path: finalPath,
                     projectId,
                     parentId
                 }
             });
             console.log(`✅ DB Node Created: ${result.id}`);
+
+            // 3. Log the change
+            if (options?.userId) {
+                await this.logFileChange(projectId, {
+                    fileName,
+                    filePath: finalPath,
+                    changeType,
+                    description: options.description,
+                    changedById: options.userId
+                });
+            }
+
             return result;
         } catch (error) {
             console.error(`❌ DB Create Error:`, error);
             throw error;
         }
+    }
+
+    async logFileChange(projectId: string, data: {
+        fileName: string,
+        filePath: string,
+        changeType: string,
+        description?: string,
+        changedById: string
+    }) {
+        // Limit description to ~10 words
+        let description = data.description;
+        if (description) {
+            const words = description.split(/\s+/).slice(0, 10);
+            description = words.join(' ');
+        }
+
+        const log = await this.prisma.fileChangeLog.create({
+            data: {
+                projectId,
+                fileName: data.fileName,
+                filePath: data.filePath,
+                changeType: data.changeType,
+                description,
+                changedById: data.changedById
+            }
+        });
+
+        // Send notification to project owner if changed by someone else (admin)
+        const project = await this.prisma.project.findUnique({
+            where: { id: projectId },
+            select: { ownerId: true, name: true, slug: true, owner: { select: { username: true } } }
+        });
+
+        if (project && project.ownerId !== data.changedById) {
+            await this.prisma.notification.create({
+                data: {
+                    userId: project.ownerId,
+                    type: 'FILE_CHANGE',
+                    message: `File "${data.fileName}" telah ${data.changeType === 'ADD' ? 'ditambahkan' : data.changeType === 'REPLACE' ? 'diperbarui' : 'diubah'} di project "${project.name}"${description ? `: ${description}` : ''}`,
+                    link: `/c/${project.owner.username}/project/${project.slug}`
+                }
+            });
+        }
+
+        return log;
+    }
+
+    async getChangeLogs(projectId: string, limit: number = 50) {
+        const logs = await this.prisma.fileChangeLog.findMany({
+            where: { projectId },
+            orderBy: { createdAt: 'desc' },
+            take: limit
+        });
+
+        return logs;
     }
 
     // Helper for explicit folder creation
@@ -240,5 +369,71 @@ export class FilesService {
         // Stream the file
         const stream = fs.createReadStream(resolvedPath);
         stream.pipe(res);
+    }
+
+    async trackDownload(projectId: string, userId: string) {
+        try {
+            // Check if user already downloaded this project recently (within 1 hour)
+            const recentDownload = await this.prisma.projectDownload.findFirst({
+                where: {
+                    projectId,
+                    userId,
+                    createdAt: {
+                        gte: new Date(Date.now() - 60 * 60 * 1000) // 1 hour ago
+                    }
+                }
+            });
+
+            // Only create new record if no recent download
+            if (!recentDownload) {
+                await this.prisma.projectDownload.create({
+                    data: {
+                        projectId,
+                        userId
+                    }
+                });
+                console.log(`📥 Download tracked: User ${userId} downloaded project ${projectId}`);
+            } else {
+                console.log(`📥 Download already tracked recently for user ${userId}`);
+            }
+        } catch (error) {
+            // Don't fail the download if tracking fails
+            console.error('Failed to track download:', error);
+        }
+    }
+
+    async getProjectDownloads(projectId: string, limit: number = 50) {
+        const downloads = await this.prisma.projectDownload.findMany({
+            where: { projectId },
+            orderBy: { createdAt: 'desc' },
+            take: limit,
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        username: true,
+                        name: true,
+                        avatarUrl: true
+                    }
+                }
+            }
+        });
+
+        // Get total count
+        const totalCount = await this.prisma.projectDownload.count({
+            where: { projectId }
+        });
+
+        // Get unique downloaders count
+        const uniqueDownloaders = await this.prisma.projectDownload.groupBy({
+            by: ['userId'],
+            where: { projectId }
+        });
+
+        return {
+            downloads,
+            totalCount,
+            uniqueDownloaders: uniqueDownloaders.length
+        };
     }
 }

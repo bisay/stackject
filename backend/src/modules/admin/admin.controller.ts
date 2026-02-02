@@ -38,6 +38,11 @@ export class AdminController {
         // SECURITY: Require a setup secret from environment variable
         const requiredSecret = process.env.ADMIN_SETUP_SECRET;
         
+        // In production, ADMIN_SETUP_SECRET is required
+        if (process.env.NODE_ENV === 'production' && !requiredSecret) {
+            throw new ForbiddenException('ADMIN_SETUP_SECRET must be set in production environment');
+        }
+        
         // If ADMIN_SETUP_SECRET is set, require it to match
         if (requiredSecret && setupSecret !== requiredSecret) {
             throw new ForbiddenException('Invalid setup secret');

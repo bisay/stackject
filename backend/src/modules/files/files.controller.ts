@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Param, Query, UseGuards, UseInterceptors, UploadedFile, Req, BadRequestException, Body, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { JwtAuthGuard, OptionalJwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FilesService } from './files.service';
 import { diskStorage } from 'multer';
 import { existsSync, mkdirSync } from 'fs';
@@ -58,11 +58,34 @@ export class FilesController {
     async uploadFile(
         @Param('projectId') projectId: string,
         @UploadedFile() file: Express.Multer.File,
-        @Body() body: { filePath?: string }
+        @Req() req: any,
+        @Body() body: { filePath?: string, description?: string, replaceMode?: string }
     ) {
         if (!file) throw new BadRequestException('No file uploaded');
         const path = body.filePath || file.originalname;
-        return this.filesService.uploadFile(projectId, file, path);
+        const userId = req.user?.id;
+        return this.filesService.uploadFile(projectId, file, path, {
+            userId,
+            description: body.description,
+            replaceMode: body.replaceMode // 'replace', 'keep-both', or undefined (check first)
+        });
+    }
+
+    @Get('projects/:projectId/check-duplicate')
+    @UseGuards(JwtAuthGuard)
+    async checkDuplicate(
+        @Param('projectId') projectId: string,
+        @Query('filePath') filePath: string
+    ) {
+        return this.filesService.checkDuplicateFile(projectId, filePath);
+    }
+
+    @Get('projects/:projectId/change-logs')
+    async getChangeLogs(
+        @Param('projectId') projectId: string,
+        @Query('limit') limit?: string
+    ) {
+        return this.filesService.getChangeLogs(projectId, limit ? parseInt(limit) : 50);
     }
 
     @Get('projects/:projectId/:fileId/content')
@@ -97,11 +120,32 @@ export class FilesController {
         }
     }
     @Get('projects/:projectId/download')
+    @UseGuards(OptionalJwtAuthGuard)
     async downloadProject(
         @Param('projectId') projectId: string,
+        @Req() req: any,
         @Res() res: Response
     ) {
+        // Check if user is logged in
+        const userId = req.user?.id;
+        if (!userId) {
+            // Redirect to login page with return URL
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            const returnUrl = encodeURIComponent(req.originalUrl);
+            return res.redirect(`${frontendUrl}/login?message=login_required&returnUrl=${returnUrl}`);
+        }
+        
+        // Track the download
+        await this.filesService.trackDownload(projectId, userId);
         return this.filesService.downloadProjectZip(projectId, res);
+    }
+
+    @Get('projects/:projectId/downloads')
+    async getProjectDownloads(
+        @Param('projectId') projectId: string,
+        @Query('limit') limit?: string
+    ) {
+        return this.filesService.getProjectDownloads(projectId, limit ? parseInt(limit) : 50);
     }
 
     @Get('projects/:projectId/:fileId/download')

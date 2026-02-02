@@ -1,10 +1,13 @@
 import { Metadata } from 'next';
 import ProjectDetailView from './view';
 
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+
 // Function to fetch data for metadata
 const getProject = async (username: string, slug: string) => {
     try {
-        const res = await fetch(`http://localhost:3001/projects/${username}/${slug}`, { cache: 'no-store' }); // Updated port to 3001
+        const res = await fetch(`${API_URL}/projects/${username}/${slug}`, { cache: 'no-store' });
         if (!res.ok) return null;
         return res.json();
     } catch (e) {
@@ -22,20 +25,38 @@ export async function generateMetadata({ params }: { params: { username: string,
         };
     }
 
+    // Resolve image URL to full path
+    const imageUrl = project.imageUrl 
+        ? (project.imageUrl.startsWith('http') ? project.imageUrl : `${API_URL}${project.imageUrl}`)
+        : `${BASE_URL}/og-default.png`;
+    
+    const projectUrl = `${BASE_URL}/c/${project.owner.username}/project/${project.slug}`;
+
     return {
         title: `${project.name} by @${project.owner.username} | Stackject`,
-        description: project.description,
+        description: project.description || `Check out ${project.name} on Stackject`,
         openGraph: {
-            title: `${project.name}`,
-            description: project.description,
+            title: `${project.name} - Stackject`,
+            description: project.description || `Check out ${project.name} on Stackject`,
             type: 'website',
-            images: project.imageUrl ? [project.imageUrl] : [],
+            url: projectUrl,
+            siteName: 'Stackject',
+            images: [{
+                url: imageUrl,
+                width: 1200,
+                height: 630,
+                alt: project.name
+            }],
         },
         twitter: {
             card: 'summary_large_image',
-            title: `${project.name}`,
-            description: project.description,
-            images: project.imageUrl ? [project.imageUrl] : [],
+            title: `${project.name} - Stackject`,
+            description: project.description || `Check out ${project.name} on Stackject`,
+            images: [imageUrl],
+            creator: `@${project.owner.username}`,
+        },
+        alternates: {
+            canonical: projectUrl,
         }
     };
 }

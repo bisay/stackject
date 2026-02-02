@@ -5,6 +5,8 @@ import { Folder, FileCode, UploadCloud, ChevronRight, ChevronDown, Loader2, Down
 import { toast } from 'sonner';
 import api from '@/lib/api';
 import CodeViewer from './code-viewer';
+import DuplicateFileModal from './duplicate-file-modal';
+import UploadDescriptionModal from './upload-description-modal';
 
 interface FileNode {
     id: string;
@@ -16,11 +18,26 @@ interface FileNode {
     path: string;
 }
 
+interface DuplicateFileInfo {
+    file: File;
+    filePath: string;
+}
+
 export default function FileExplorer({ projectId, isOwner }: { projectId: string, isOwner: boolean }) {
     const [files, setFiles] = useState<FileNode[]>([]);
     const [breadcrumbs, setBreadcrumbs] = useState<{ id: string, name: string }[]>([]);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+    
+    // Duplicate file modal state
+    const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+    const [duplicateFile, setDuplicateFile] = useState<DuplicateFileInfo | null>(null);
+    const [pendingFiles, setPendingFiles] = useState<DuplicateFileInfo[]>([]);
+    
+    // Upload description modal state
+    const [descriptionModalOpen, setDescriptionModalOpen] = useState(false);
+    const [pendingUploadFiles, setPendingUploadFiles] = useState<DuplicateFileInfo[]>([]);
+    const [uploadDescription, setUploadDescription] = useState('');
 
     // Viewer State
     const [viewingFile, setViewingFile] = useState<{ name: string, content: string, type?: string, path?: string } | null>(null);
@@ -102,7 +119,6 @@ export default function FileExplorer({ projectId, isOwner }: { projectId: string
 
     const onDrop = async (acceptedFiles: File[], fileRejections: any[], event: any) => {
         if (!isOwner) return;
-        setUploading(true);
         let filesToUpload: File[] = [];
 
         const items = event.dataTransfer ? event.dataTransfer.items : null;
@@ -117,18 +133,140 @@ export default function FileExplorer({ projectId, isOwner }: { projectId: string
             filesToUpload = acceptedFiles;
         }
 
-        for (const file of filesToUpload) {
-            const form = new FormData();
-            form.append('file', file);
-            const relativePath = (file as any).path || (file as any).webkitRelativePath || file.name;
-            form.append('filePath', relativePath);
+        // Prepare files for upload
+        const filesToProcess: DuplicateFileInfo[] = filesToUpload.map(file => ({
+            file,
+            filePath: (file as any).path || (file as any).webkitRelativePath || file.name
+        }));
+        
+        // Store files and show description modal
+        setPendingUploadFiles(filesToProcess);
+        setDescriptionModalOpen(true);
+    };
+    
+    // Handle description modal submit
+    const handleDescriptionSubmit = async (description: string, changeType: string) => {
+        setDescriptionModalOpen(false);
+        setUploadDescription(description);
+        setUploading(true);
+        
+        await processFileUpload(pendingUploadFiles, description);
+        
+        setPendingUploadFiles([]);
+        setUploading(false);
+        const currentParentId = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].id : undefined;
+        fetchFiles(currentParentId);
+    };
+    
+    // Handle description modal close
+    const handleDescriptionCancel = () => {
+        setDescriptionModalOpen(false);
+        setPendingUploadFiles([]);
+    };
+    
+    // Helper function to process file uploads with duplicate detection
+    const processFileUpload = async (filesToProcess: DuplicateFileInfo[], description: string = '') => {
+        for (let i = 0; i < filesToProcess.length; i++) {
+            const { file, filePath } = filesToProcess[i];
+            
             try {
-                await api.post(`/files/projects/${projectId}/upload`, form);
+                // Check for duplicate first
+                const checkRes = await api.get(`/files/projects/${projectId}/check-duplicate`, {
+                    params: { filePath }
+                });
+                
+                if (checkRes.data.exists) {
+                    // Store remaining files and show modal
+                    setPendingFiles(filesToProcess.slice(i + 1));
+                    setDuplicateFile({ file, filePath });
+                    setDuplicateModalOpen(true);
+                    return; // Stop processing, will continue after user decision
+                }
+                
+                // No duplicate, upload normally
+                await uploadFileWithMode(file, filePath, 'replace', description);
             } catch (e) {
                 toast.error(`Failed to upload ${file.name}`);
             }
         }
+    };
+    
+    // Upload file with specific mode
+    const uploadFileWithMode = async (file: File, filePath: string, replaceMode: 'replace' | 'keep-both', description: string = '') => {
+        const form = new FormData();
+        form.append('file', file);
+        form.append('filePath', filePath);
+        form.append('replaceMode', replaceMode);
+        form.append('description', description);
+        
+        try {
+            await api.post(`/files/projects/${projectId}/upload`, form);
+        } catch (e) {
+            throw e;
+        }
+    };
+    
+    // Handle duplicate file replace
+    const handleDuplicateReplace = async () => {
+        if (!duplicateFile) return;
+        
+        try {
+            await uploadFileWithMode(duplicateFile.file, duplicateFile.filePath, 'replace', uploadDescription);
+            toast.success(`File ${duplicateFile.file.name} berhasil ditimpa`);
+        } catch (e) {
+            toast.error(`Failed to replace ${duplicateFile.file.name}`);
+        }
+        
+        setDuplicateModalOpen(false);
+        setDuplicateFile(null);
+        
+        // Continue processing remaining files
+        if (pendingFiles.length > 0) {
+            await processFileUpload(pendingFiles, uploadDescription);
+            setPendingFiles([]);
+        }
+        
+        // Refresh files
+        const currentParentId = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].id : undefined;
+        fetchFiles(currentParentId);
         setUploading(false);
+    };
+    
+    // Handle keep both files
+    const handleDuplicateKeepBoth = async () => {
+        if (!duplicateFile) return;
+        
+        try {
+            await uploadFileWithMode(duplicateFile.file, duplicateFile.filePath, 'keep-both', uploadDescription);
+            toast.success(`File ${duplicateFile.file.name} disimpan dengan nama baru`);
+        } catch (e) {
+            toast.error(`Failed to upload ${duplicateFile.file.name}`);
+        }
+        
+        setDuplicateModalOpen(false);
+        setDuplicateFile(null);
+        
+        // Continue processing remaining files
+        if (pendingFiles.length > 0) {
+            await processFileUpload(pendingFiles, uploadDescription);
+            setPendingFiles([]);
+        }
+        
+        // Refresh files
+        const currentParentId = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].id : undefined;
+        fetchFiles(currentParentId);
+        setUploading(false);
+    };
+    
+    // Handle cancel duplicate modal
+    const handleDuplicateCancel = () => {
+        setDuplicateModalOpen(false);
+        setDuplicateFile(null);
+        setPendingFiles([]);
+        setUploadDescription('');
+        setUploading(false);
+        
+        // Refresh files
         const currentParentId = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].id : undefined;
         fetchFiles(currentParentId);
     };
@@ -320,6 +458,24 @@ export default function FileExplorer({ projectId, isOwner }: { projectId: string
                 type={viewingFile?.type as 'text' | 'image' | undefined}
                 isEditable={isOwner}
                 onSave={handleSaveFile}
+            />
+            
+            {/* Duplicate File Modal */}
+            <DuplicateFileModal
+                isOpen={duplicateModalOpen}
+                fileName={duplicateFile?.file.name || ''}
+                filePath={duplicateFile?.filePath || ''}
+                onClose={handleDuplicateCancel}
+                onReplace={handleDuplicateReplace}
+                onKeepBoth={handleDuplicateKeepBoth}
+            />
+            
+            {/* Upload Description Modal */}
+            <UploadDescriptionModal
+                isOpen={descriptionModalOpen}
+                filesCount={pendingUploadFiles.length}
+                onClose={handleDescriptionCancel}
+                onSubmit={handleDescriptionSubmit}
             />
         </>
     );

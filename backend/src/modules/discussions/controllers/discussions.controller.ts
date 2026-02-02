@@ -60,10 +60,28 @@ export class DiscussionsController {
             },
             filename: (req, file, cb) => {
                 const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-                const ext = file.originalname.split('.').pop();
+                // Sanitize extension
+                const ext = (file.originalname.split('.').pop() || 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '');
                 cb(null, `${uniqueSuffix}.${ext}`);
             }
-        })
+        }),
+        limits: {
+            fileSize: 10 * 1024 * 1024, // 10MB max for images
+        },
+        fileFilter: (req, file, cb) => {
+            // Only allow images
+            const allowedMimes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            if (!allowedMimes.includes(file.mimetype)) {
+                return cb(new Error('Only image files (JPEG, PNG, GIF, WebP) are allowed'), false);
+            }
+            // Block dangerous extensions hidden in filename
+            const blockedExts = ['.exe', '.bat', '.cmd', '.sh', '.php', '.jsp', '.js', '.html', '.htm'];
+            const nameLower = file.originalname.toLowerCase();
+            if (blockedExts.some(ext => nameLower.includes(ext))) {
+                return cb(new Error('Invalid file type'), false);
+            }
+            cb(null, true);
+        }
     }))
     uploadImage(@UploadedFile() file: Express.Multer.File) {
         if (!file) throw new BadRequestException('No file uploaded');
