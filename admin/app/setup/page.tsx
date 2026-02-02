@@ -9,7 +9,8 @@ export default function SetupPage() {
         email: '',
         username: '',
         password: '',
-        name: ''
+        name: '',
+        setupSecret: ''
     });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
@@ -29,7 +30,16 @@ export default function SetupPage() {
         setLoading(true);
 
         try {
-            await api.post('/admin/setup', formData);
+            await api.post('/admin/setup', {
+                email: formData.email,
+                username: formData.username,
+                password: formData.password,
+                name: formData.name
+            }, {
+                headers: {
+                    'x-setup-secret': formData.setupSecret
+                }
+            });
             router.push('/login');
         } catch (err: any) {
             setError(err.response?.data?.message || 'Setup failed');
@@ -120,6 +130,20 @@ export default function SetupPage() {
                             value={formData.password}
                             onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                         />
+                    </div>
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: 600, fontSize: '0.9rem' }}>Setup Secret</label>
+                        <input
+                            type="password"
+                            required
+                            placeholder="Enter the ADMIN_SETUP_SECRET from backend .env"
+                            style={{ width: '100%' }}
+                            value={formData.setupSecret}
+                            onChange={(e) => setFormData({ ...formData, setupSecret: e.target.value })}
+                        />
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                            This is set in backend .env as ADMIN_SETUP_SECRET
+                        </p>
                     </div>
 
                     <button
