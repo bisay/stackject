@@ -2,7 +2,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { X, Upload, Check, Loader2, Save } from 'lucide-react';
-import api from '@/lib/api';
+import api, { getBackendUrl } from '@/lib/api';
 
 interface EditProjectModalProps {
     isOpen: boolean;
@@ -37,7 +37,7 @@ export default function EditProjectModal({ isOpen, onClose, onSuccess, project }
                 demoUrl: project.demoUrl || ''
             });
             if (project.imageUrl) {
-                setPreview(`http://localhost:3001${project.imageUrl}`);
+                setPreview(`${getBackendUrl()}${project.imageUrl}`);
             } else {
                 setPreview(null);
             }

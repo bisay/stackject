@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef } from 'react';
 import { useAuth } from '@/context/auth-context';
-import api from '@/lib/api';
+import api, { getBackendUrl } from '@/lib/api';
 import { toast } from 'sonner';
 import { X, Camera, Loader2, Save, AlertTriangle } from 'lucide-react';
 
@@ -20,7 +20,7 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     const [bio, setBio] = useState(user?.bio || '');
     const [email, setEmail] = useState(user?.email || '');
     const [avatar, setAvatar] = useState<File | null>(null);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(user?.avatarUrl ? `http://localhost:3001${user.avatarUrl}` : null); // Helper for localhost dev
+    const [previewUrl, setPreviewUrl] = useState<string | null>(user?.avatarUrl ? `${getBackendUrl()}${user.avatarUrl}` : null);
     const [loading, setLoading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 

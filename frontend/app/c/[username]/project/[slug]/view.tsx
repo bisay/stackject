@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import api from '@/lib/api';
+import api, { getApiUrl } from '@/lib/api';
 import Navbar from '@/components/navbar';
 import { useAuth } from '@/context/auth-context';
 import { Share2, MoreHorizontal, Github, ExternalLink, Heart, MessageSquare, ArrowLeft, Plus, X, Code, Layers, BadgeCheck, Sparkles, Link2, Check, Download, Users, History, FileText, FilePlus, FileEdit, RefreshCw } from 'lucide-react';
@@ -445,7 +445,7 @@ export default function ProjectDetailView() {
                                 width: '160px', 
                                 height: '160px', 
                                 borderRadius: isAdminProject ? '20px' : '12px',
-                                background: `url(${project.imageUrl.startsWith('http') ? project.imageUrl : `http://localhost:3001${project.imageUrl}`}) center/cover`,
+                                background: `url(${project.imageUrl.startsWith('http') ? project.imageUrl : `${getApiUrl()}${project.imageUrl}`}) center/cover`,
                                 border: isAdminProject ? '3px solid transparent' : '1px solid var(--glass-border)',
                                 flexShrink: 0,
                                 boxShadow: isAdminProject 
@@ -568,7 +568,7 @@ export default function ProjectDetailView() {
                                                 height: '48px',
                                                 borderRadius: '50%',
                                                 background: download.user.avatarUrl 
-                                                    ? `url(${download.user.avatarUrl.startsWith('http') ? download.user.avatarUrl : `http://localhost:3001${download.user.avatarUrl}`}) center/cover`
+                                                    ? `url(${download.user.avatarUrl.startsWith('http') ? download.user.avatarUrl : `${getApiUrl()}${download.user.avatarUrl}`}) center/cover`
                                                     : 'linear-gradient(135deg, var(--primary), var(--accent))',
                                                 display: 'flex',
                                                 alignItems: 'center',

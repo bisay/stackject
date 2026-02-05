@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from 'react';
-import api from '@/lib/api';
+import api, { getApiUrl } from '@/lib/api';
 import Navbar from '@/components/navbar';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
@@ -133,7 +133,7 @@ export default function ProjectPage() {
                                 {(project as any).imageUrl && (
                                     <div style={{ 
                                         height: '200px', 
-                                        background: `url(http://localhost:3001${(project as any).imageUrl}) center/cover`,
+                                        background: `url(${getApiUrl()}${(project as any).imageUrl}) center/cover`,
                                         borderBottom: isAdmin ? '2px solid rgba(201,169,98,0.3)' : 'none'
                                     }}></div>
                                 )}

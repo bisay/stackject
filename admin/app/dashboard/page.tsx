@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from 'react';
-import api from '@/lib/api';
+import api, { getBackendUrl } from '@/lib/api';
 import Navbar from '@/components/navbar';
 import { useAuth } from '@/context/auth-context';
 import { useRouter } from 'next/navigation';
@@ -194,7 +194,7 @@ export default function Dashboard() {
                                     {data.projects.map((p: any) => (
                                         <div key={p.id} className="project-card" style={{ background: 'var(--btn-ghost-bg)', borderRadius: '12px', padding: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', border: '1px solid var(--glass-border)', opacity: p.status === 'archived' ? 0.6 : 1, gap: '1rem' }}>
                                             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', width: '100%', overflow: 'hidden' }}>
-                                                {p.imageUrl && <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: `url(http://localhost:3001${p.imageUrl}) center/cover`, flexShrink: 0 }}></div>}
+                                                {p.imageUrl && <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: `url(${getBackendUrl()}${p.imageUrl}) center/cover`, flexShrink: 0 }}></div>}
                                                 {!p.imageUrl && <div style={{ width: '48px', height: '48px', borderRadius: '8px', background: 'var(--glass-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Rocket size={20} color="var(--primary)" /></div>}
                                                 <div style={{ cursor: 'pointer', overflow: 'hidden', minWidth: 0 }} onClick={() => router.push(`/c/${user?.username}/project/${p.slug}`)}>
                                                     <div style={{ fontWeight: 'bold', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} className="hover:text-primary">{p.name}</div>

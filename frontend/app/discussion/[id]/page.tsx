@@ -1,13 +1,12 @@
 import { Metadata } from 'next';
 import DiscussionView from './view';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-backend-prod.stackject.cloud';
+
 // Function to fetch data for metadata
-// We can't access context here, so we might need a direct backend call.
-// Since we are in the same network, we can call the backend API URL.
-// Assuming backend is at http://localhost:4000
 const getDiscussion = async (id: string) => {
     try {
-        const res = await fetch(`http://localhost:3001/discussions/${id}`, { cache: 'no-store' });
+        const res = await fetch(`${API_URL}/discussions/${id}`, { cache: 'no-store' });
         if (!res.ok) return null;
         return res.json();
     } catch (e) {

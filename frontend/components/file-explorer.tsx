@@ -4,7 +4,7 @@ import { useDropzone } from 'react-dropzone';
 import { useRouter } from 'next/navigation';
 import { Folder, FileCode, UploadCloud, ChevronRight, ChevronDown, Loader2, Download, Image as ImageIcon, MoreVertical, Edit2, Trash2, Pencil, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
-import api from '@/lib/api';
+import api, { getApiUrl } from '@/lib/api';
 import CodeViewer from './code-viewer';
 import { useAuth } from '@/context/auth-context';
 import DuplicateFileModal from './duplicate-file-modal';
@@ -68,7 +68,7 @@ export default function FileExplorer({ projectId, isOwner, onFilesChanged }: { p
         } else {
             // Check if Image
             if (node.mimeType && node.mimeType.startsWith('image/')) {
-                const imageUrl = `http://localhost:3001/files/projects/${projectId}/${node.id}/raw`;
+                const imageUrl = `${getApiUrl()}/files/projects/${projectId}/${node.id}/raw`;
                 setViewingFile({ name: node.name, content: imageUrl, type: 'image', path: node.path });
                 return;
             }
@@ -301,7 +301,7 @@ export default function FileExplorer({ projectId, isOwner, onFilesChanged }: { p
         }
         
         // Direct download link
-        window.open(`http://localhost:3001/files/projects/${projectId}/download`, '_blank');
+        window.open(`${getApiUrl()}/files/projects/${projectId}/download`, '_blank');
     };
 
     const handleSaveFile = async (newContent: string) => {
@@ -351,7 +351,7 @@ export default function FileExplorer({ projectId, isOwner, onFilesChanged }: { p
 
     const handleDownloadFile = (node: FileNode) => {
         // Direct download or open content
-        window.open(`http://localhost:3001/files/projects/${projectId}/${node.id}/download`, '_blank');
+        window.open(`${getApiUrl()}/files/projects/${projectId}/${node.id}/download`, '_blank');
     };
 
 
