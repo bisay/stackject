@@ -23,11 +23,33 @@ interface DuplicateFileInfo {
     filePath: string;
 }
 
+// Upload progress state
+interface UploadProgress {
+    fileName: string;
+    progress: number;
+    total: number;
+    uploaded: number;
+}
+
+// Helper function to format file size
+const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+};
+
 export default function FileExplorer({ projectId, isOwner }: { projectId: string, isOwner: boolean }) {
     const [files, setFiles] = useState<FileNode[]>([]);
     const [breadcrumbs, setBreadcrumbs] = useState<{ id: string, name: string }[]>([]);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
+    
+    // Upload progress state
+    const [uploadProgress, setUploadProgress] = useState<UploadProgress | null>(null);
+    const [uploadedCount, setUploadedCount] = useState(0);
+    const [totalFilesCount, setTotalFilesCount] = useState(0);
     
     // Duplicate file modal state
     const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
@@ -150,7 +172,17 @@ export default function FileExplorer({ projectId, isOwner }: { projectId: string
         setUploadDescription(description);
         setUploading(true);
         
+        // Set total files count for progress tracking
+        setTotalFilesCount(pendingUploadFiles.length);
+        setUploadedCount(0);
+        setUploadProgress(null);
+        
         await processFileUpload(pendingUploadFiles, description);
+        
+        // Reset progress states
+        setUploadProgress(null);
+        setTotalFilesCount(0);
+        setUploadedCount(0);
         
         setPendingUploadFiles([]);
         setUploading(false);
@@ -199,8 +231,30 @@ export default function FileExplorer({ projectId, isOwner }: { projectId: string
         form.append('replaceMode', replaceMode);
         form.append('description', description);
         
+        // Set initial progress
+        setUploadProgress({
+            fileName: file.name,
+            progress: 0,
+            total: file.size,
+            uploaded: 0
+        });
+        
         try {
-            await api.post(`/files/projects/${projectId}/upload`, form);
+            await api.post(`/files/projects/${projectId}/upload`, form, {
+                onUploadProgress: (progressEvent) => {
+                    const total = progressEvent.total || file.size;
+                    const loaded = progressEvent.loaded;
+                    const percentCompleted = Math.round((loaded * 100) / total);
+                    
+                    setUploadProgress({
+                        fileName: file.name,
+                        progress: percentCompleted,
+                        total: total,
+                        uploaded: loaded
+                    });
+                }
+            });
+            setUploadedCount(prev => prev + 1);
         } catch (e) {
             throw e;
         }
@@ -410,7 +464,79 @@ export default function FileExplorer({ projectId, isOwner }: { projectId: string
 
                 {/* File List */}
                 <div style={{ flex: 1, padding: '0.5rem', position: 'relative' }}>
-                    {uploading && <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--primary)' }}>Uploading...</div>}
+                    {uploading && (
+                        <div style={{ padding: '1rem', textAlign: 'center' }}>
+                            {/* Upload Progress Bar */}
+                            <div style={{ 
+                                background: 'rgba(99, 102, 241, 0.1)', 
+                                borderRadius: '12px', 
+                                padding: '1.5rem', 
+                                maxWidth: '400px', 
+                                margin: '0 auto',
+                                border: '1px solid var(--glass-border)'
+                            }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
+                                    <Loader2 className="spin" size={24} style={{ color: 'var(--primary)' }} />
+                                    <div style={{ textAlign: 'left', flex: 1 }}>
+                                        <div style={{ fontWeight: 600, color: 'var(--text)' }}>
+                                            Uploading files...
+                                        </div>
+                                        {totalFilesCount > 1 && (
+                                            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                                File {uploadedCount + 1} of {totalFilesCount}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                {uploadProgress && (
+                                    <>
+                                        <div style={{ 
+                                            fontSize: '0.85rem', 
+                                            color: 'var(--text-muted)', 
+                                            marginBottom: '8px',
+                                            overflow: 'hidden',
+                                            textOverflow: 'ellipsis',
+                                            whiteSpace: 'nowrap'
+                                        }}>
+                                            📄 {uploadProgress.fileName}
+                                        </div>
+                                        
+                                        {/* Progress Bar */}
+                                        <div style={{ 
+                                            width: '100%', 
+                                            height: '8px', 
+                                            background: 'rgba(0,0,0,0.2)', 
+                                            borderRadius: '4px', 
+                                            overflow: 'hidden',
+                                            marginBottom: '8px'
+                                        }}>
+                                            <div style={{ 
+                                                width: `${uploadProgress.progress}%`, 
+                                                height: '100%', 
+                                                background: 'linear-gradient(90deg, #6366f1, #a855f7)', 
+                                                borderRadius: '4px',
+                                                transition: 'width 0.2s ease'
+                                            }} />
+                                        </div>
+                                        
+                                        {/* Progress Details */}
+                                        <div style={{ 
+                                            display: 'flex', 
+                                            justifyContent: 'space-between', 
+                                            fontSize: '0.8rem', 
+                                            color: 'var(--text-muted)' 
+                                        }}>
+                                            <span>{uploadProgress.progress}%</span>
+                                            <span>
+                                                {formatFileSize(uploadProgress.uploaded)} / {formatFileSize(uploadProgress.total)}
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </div>
+                    )}
                     {fileLoading && (
                         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
                             <Loader2 className="spin" /> Opening...
