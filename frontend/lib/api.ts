@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // Auto-detect: jika diakses dari localhost, gunakan localhost API
 // Jika dari domain production, gunakan API production
-const getApiUrl = () => {
+export const getApiUrl = () => {
     if (typeof window !== 'undefined') {
         const host = window.location.hostname;
         if (host === 'localhost' || host === '127.0.0.1') {
@@ -14,6 +14,9 @@ const getApiUrl = () => {
     // Server-side: use env or default
     return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 };
+
+// Alias for consistency
+export const getBackendUrl = getApiUrl;
 
 const api = axios.create({
     baseURL: getApiUrl(),

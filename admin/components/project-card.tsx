@@ -2,9 +2,11 @@
 import React from 'react';
 import { Rocket, ExternalLink } from 'lucide-react';
 import Link from 'next/link';
+import { getBackendUrl } from '@/lib/api';
 
 export default function ProjectCard({ project }: { project: any }) {
     if (!project) return null;
+    const backendUrl = getBackendUrl();
 
     return (
         <a
@@ -13,7 +15,7 @@ export default function ProjectCard({ project }: { project: any }) {
         >
             <span className="glass-card" style={{ padding: '15px', display: 'flex', gap: '15px', alignItems: 'center', transition: 'transform 0.2s', border: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.03)', width: '100%' }}>
                 {project.imageUrl ? (
-                    <span style={{ width: '60px', height: '60px', borderRadius: '10px', background: `url(${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${project.imageUrl}) center/cover`, display: 'block', flexShrink: 0 }}></span>
+                    <span style={{ width: '60px', height: '60px', borderRadius: '10px', background: `url(${backendUrl}${project.imageUrl}) center/cover`, display: 'block', flexShrink: 0 }}></span>
                 ) : (
                     <span style={{ width: '60px', height: '60px', borderRadius: '10px', background: 'var(--glass-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <Rocket size={24} color="var(--primary)" />

@@ -5,6 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { toast } from 'sonner';
 import { Loader2, ArrowLeft, AlertCircle } from 'lucide-react';
+import { getApiUrl } from '@/lib/api';
 
 function LoginContent() {
     const { login } = useAuth();
@@ -38,7 +39,7 @@ function LoginContent() {
             // Check if there's a return URL (from download redirect)
             if (returnUrl) {
                 // Redirect to the download URL
-                const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+                const apiUrl = getApiUrl();
                 window.location.href = `${apiUrl}${decodeURIComponent(returnUrl)}`;
                 return;
             }

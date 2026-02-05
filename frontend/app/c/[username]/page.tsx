@@ -1,8 +1,8 @@
 import { Metadata } from 'next';
 import ProfileView from './view';
 
-const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000';
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://stackject.cloud';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'https://api-backend-prod.stackject.cloud';
 
 // Function to fetch data for metadata
 const getUser = async (username: string) => {

@@ -2,11 +2,13 @@
 import React from 'react';
 import { Rocket, ExternalLink, BadgeCheck, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import { getApiUrl } from '@/lib/api';
 
 export default function ProjectCard({ project }: { project: any }) {
     if (!project) return null;
 
     const isAdminProject = project.owner?.role === 'ADMIN';
+    const apiUrl = getApiUrl();
 
     return (
         <a
@@ -52,7 +54,7 @@ export default function ProjectCard({ project }: { project: any }) {
                         width: '60px', 
                         height: '60px', 
                         borderRadius: '10px', 
-                        background: `url(${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}${project.imageUrl}) center/cover`, 
+                        background: `url(${apiUrl}${project.imageUrl}) center/cover`, 
                         display: 'block', 
                         flexShrink: 0,
                         border: isAdminProject ? '2px solid rgba(121,40,202,0.4)' : 'none',

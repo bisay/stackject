@@ -2,7 +2,7 @@ import axios from 'axios';
 
 // In production, use Next.js API proxy to avoid cross-domain cookie issues
 // In development, call backend directly
-const getApiUrl = () => {
+export const getApiUrl = () => {
     if (typeof window !== 'undefined') {
         const host = window.location.hostname;
         if (host === 'localhost' || host === '127.0.0.1') {
@@ -12,6 +12,18 @@ const getApiUrl = () => {
         return '/api';
     }
     // Server-side: use env or default
+    return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
+};
+
+// For static assets like images, always use the real backend URL
+export const getBackendUrl = () => {
+    if (typeof window !== 'undefined') {
+        const host = window.location.hostname;
+        if (host === 'localhost' || host === '127.0.0.1') {
+            return 'http://localhost:3001';
+        }
+        return 'https://api-backend-prod.stackject.cloud';
+    }
     return process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 };
 
