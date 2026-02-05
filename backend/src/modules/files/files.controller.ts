@@ -7,8 +7,8 @@ import { diskStorage } from 'multer';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
-// Dangerous file extensions that should never be uploaded
-const BLOCKED_EXTENSIONS = ['.exe', '.bat', '.cmd', '.sh', '.php', '.jsp', '.cgi', '.dll', '.com', '.msi', '.scr', '.ps1', '.vbs', '.wsf'];
+// No file type restrictions - allow all files
+const BLOCKED_EXTENSIONS: string[] = [];
 
 @Controller('files')
 export class FilesController {
