@@ -163,4 +163,15 @@ export class FilesController {
     ) {
         return this.filesService.serveFileRaw(fileId, res);
     }
+
+    @Post('projects/:projectId/files/delete')
+    @UseGuards(JwtAuthGuard)
+    async deleteFile(
+        @Param('projectId') projectId: string,
+        @Body() body: { path: string },
+        @Req() req: any
+    ) {
+        const userId = req.user?.id;
+        return this.filesService.deleteFileOrDirectory(projectId, body.path, userId);
+    }
 }

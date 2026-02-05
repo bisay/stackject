@@ -436,4 +436,63 @@ export class FilesService {
             uniqueDownloaders: uniqueDownloaders.length
         };
     }
+
+    async deleteFileOrDirectory(projectId: string, path: string, userId: string) {
+        // Check project ownership
+        const project = await this.prisma.project.findUnique({
+            where: { id: projectId },
+            select: { ownerId: true }
+        });
+
+        if (!project) throw new NotFoundException('Project not found');
+        if (project.ownerId !== userId) throw new ForbiddenException('You are not the owner of this project');
+
+        // Find the file/directory by path
+        const fileNode = await this.prisma.fileNode.findFirst({
+            where: { projectId, path }
+        });
+
+        if (!fileNode) {
+            throw new NotFoundException('File or directory not found');
+        }
+
+        // If it's a directory, delete all children recursively
+        if (fileNode.type === 'directory') {
+            await this.deleteDirectoryRecursive(projectId, fileNode.id);
+        } else {
+            // Delete the physical file
+            const fs = require('fs');
+            if (fileNode.storagePath && fs.existsSync(fileNode.storagePath)) {
+                fs.unlinkSync(fileNode.storagePath);
+            }
+        }
+
+        // Delete the node from database
+        await this.prisma.fileNode.delete({ where: { id: fileNode.id } });
+
+        return { success: true, message: `${fileNode.type === 'directory' ? 'Directory' : 'File'} deleted successfully` };
+    }
+
+    private async deleteDirectoryRecursive(projectId: string, parentId: string) {
+        const fs = require('fs');
+        
+        // Find all children
+        const children = await this.prisma.fileNode.findMany({
+            where: { projectId, parentId }
+        });
+
+        for (const child of children) {
+            if (child.type === 'directory') {
+                // Recursively delete subdirectories
+                await this.deleteDirectoryRecursive(projectId, child.id);
+            } else {
+                // Delete physical file
+                if (child.storagePath && fs.existsSync(child.storagePath)) {
+                    fs.unlinkSync(child.storagePath);
+                }
+            }
+            // Delete the child node
+            await this.prisma.fileNode.delete({ where: { id: child.id } });
+        }
+    }
 }
