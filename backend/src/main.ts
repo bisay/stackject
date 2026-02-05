@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import * as cookieParser from 'cookie-parser';
+import * as bodyParser from 'body-parser';
 
 async function bootstrap() {
     console.log("🟡 [DEBUG] Starting Bootstrap...");
@@ -14,6 +15,10 @@ async function bootstrap() {
         console.log("🟢 [DEBUG] Nest App Created!");
 
         app.use(cookieParser());
+        
+        // Increase body parser limits for large file uploads
+        app.use(bodyParser.json({ limit: '500mb' }));
+        app.use(bodyParser.urlencoded({ limit: '500mb', extended: true }));
 
 
         // Security: Helmet

@@ -44,7 +44,7 @@ export class FilesController {
             }
         }),
         limits: {
-            fileSize: 50 * 1024 * 1024, // 50MB max per file
+            fileSize: 500 * 1024 * 1024, // 500MB max per file
         },
         fileFilter: (req, file, cb) => {
             // Block dangerous file extensions
