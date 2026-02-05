@@ -462,8 +462,8 @@ export class FilesService {
         } else {
             // Delete the physical file
             const fs = require('fs');
-            if (fileNode.storagePath && fs.existsSync(fileNode.storagePath)) {
-                fs.unlinkSync(fileNode.storagePath);
+            if (fileNode.diskPath && fs.existsSync(fileNode.diskPath)) {
+                fs.unlinkSync(fileNode.diskPath);
             }
         }
 
@@ -487,8 +487,8 @@ export class FilesService {
                 await this.deleteDirectoryRecursive(projectId, child.id);
             } else {
                 // Delete physical file
-                if (child.storagePath && fs.existsSync(child.storagePath)) {
-                    fs.unlinkSync(child.storagePath);
+                if (child.diskPath && fs.existsSync(child.diskPath)) {
+                    fs.unlinkSync(child.diskPath);
                 }
             }
             // Delete the child node
