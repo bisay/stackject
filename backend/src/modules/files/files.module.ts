@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { FilesService } from './files.service';
 import { FilesController } from './files.controller';
+import { ChunkedUploadService } from './chunked-upload.service';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { JwtModule } from '@nestjs/jwt';
 
@@ -21,6 +22,6 @@ import { JwtModule } from '@nestjs/jwt';
         })
     ],
     controllers: [FilesController],
-    providers: [FilesService],
+    providers: [FilesService, ChunkedUploadService],
 })
 export class FilesModule { }

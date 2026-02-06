@@ -3,16 +3,23 @@ import { Response } from 'express';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtAuthGuard, OptionalJwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FilesService } from './files.service';
+import { ChunkedUploadService } from './chunked-upload.service';
 import { diskStorage } from 'multer';
 import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
 // No file type restrictions - allow all files
-const BLOCKED_EXTENSIONS: string[] = [];
+const D_EXTENSIONS: string[] = [];
+
+// Blocked extensions for security
+const BLOCKED_EXTENSIONS = ['.exe', '.bat', '.cmd', '.com', '.msi', '.scr', '.pif', '.vbs', '.js.exe'];
 
 @Controller('files')
 export class FilesController {
-    constructor(private readonly filesService: FilesService) { }
+    constructor(
+        private readonly filesService: FilesService,
+        private readonly chunkedUploadService: ChunkedUploadService
+    ) { }
 
     @Get('projects/:projectId')
     async getFiles(@Param('projectId') projectId: string, @Query('parent') parent: string, @Req() req: any) {
@@ -173,5 +180,105 @@ export class FilesController {
     ) {
         const userId = req.user?.id;
         return this.filesService.deleteFileOrDirectory(projectId, body.path, userId);
+    }
+
+    // ==================== CHUNKED UPLOAD ENDPOINTS ====================
+
+    /**
+     * Initialize a chunked upload session
+     */
+    @Post('projects/:projectId/chunked/init')
+    @UseGuards(JwtAuthGuard)
+    async initChunkedUpload(
+        @Param('projectId') projectId: string,
+        @Body() body: {
+            fileName: string;
+            filePath: string;
+            fileSize: number;
+            totalChunks: number;
+            mimeType: string;
+            replaceMode?: string;
+            description?: string;
+        },
+        @Req() req: any
+    ) {
+        const userId = req.user?.id;
+        if (!userId) throw new BadRequestException('User not authenticated');
+        
+        return this.chunkedUploadService.initUpload(projectId, userId, body);
+    }
+
+    /**
+     * Upload a single chunk
+     */
+    @Post('projects/:projectId/chunked/upload')
+    @UseGuards(JwtAuthGuard)
+    @UseInterceptors(FileInterceptor('chunk', {
+        storage: diskStorage({
+            destination: (req: any, file, cb) => {
+                const userId = req.user?.id;
+                const projectId = req.params?.projectId || 'unknown';
+                const chunkPath = join(process.cwd(), 'uploads', 'chunks', userId, projectId);
+                if (!existsSync(chunkPath)) mkdirSync(chunkPath, { recursive: true });
+                cb(null, chunkPath);
+            },
+            filename: (req, file, cb) => {
+                const uploadId = req.body?.uploadId || 'unknown';
+                const chunkIndex = req.body?.chunkIndex || '0';
+                cb(null, `${uploadId}_chunk_${chunkIndex}`);
+            }
+        }),
+        limits: {
+            fileSize: 10 * 1024 * 1024, // 10MB max per chunk
+        }
+    }))
+    async uploadChunk(
+        @Param('projectId') projectId: string,
+        @UploadedFile() chunk: Express.Multer.File,
+        @Body() body: {
+            uploadId: string;
+            chunkIndex: string;
+            totalChunks: string;
+        },
+        @Req() req: any
+    ) {
+        if (!chunk) throw new BadRequestException('No chunk uploaded');
+        const userId = req.user?.id;
+        
+        return this.chunkedUploadService.uploadChunk(
+            body.uploadId,
+            parseInt(body.chunkIndex),
+            parseInt(body.totalChunks),
+            chunk,
+            userId
+        );
+    }
+
+    /**
+     * Finalize chunked upload - merge all chunks
+     */
+    @Post('projects/:projectId/chunked/finalize')
+    @UseGuards(JwtAuthGuard)
+    async finalizeChunkedUpload(
+        @Param('projectId') projectId: string,
+        @Body() body: { uploadId: string },
+        @Req() req: any
+    ) {
+        const userId = req.user?.id;
+        return this.chunkedUploadService.finalizeUpload(body.uploadId, projectId, userId);
+    }
+
+    /**
+     * Cancel chunked upload - cleanup chunks
+     */
+    @Post('projects/:projectId/chunked/cancel')
+    @UseGuards(JwtAuthGuard)
+    async cancelChunkedUpload(
+        @Param('projectId') projectId: string,
+        @Body() body: { uploadId: string },
+        @Req() req: any
+    ) {
+        const userId = req.user?.id;
+        return this.chunkedUploadService.cancelUpload(body.uploadId, userId);
     }
 }

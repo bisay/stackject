@@ -3,6 +3,7 @@ import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { X, Upload, Check, Loader2, FileCode, UploadCloud } from 'lucide-react';
 import api from '@/lib/api';
+import { uploadFileChunked, getRecommendedChunkSize } from '@/lib/chunked-upload';
 
 interface UploadModalProps {
     isOpen: boolean;
@@ -77,20 +78,39 @@ export default function UploadModal({ isOpen, onClose, onSuccess }: UploadModalP
             const res = await api.post('/projects', form);
             const projectId = res.data.id;
 
-            // 2. Upload Source Files (if any)
+            // 2. Upload Source Files (if any) - with chunked upload support
             if (sourceFiles.length > 0) {
                 setUploadProgress(`Uploading ${sourceFiles.length} files...`);
+                const CHUNK_THRESHOLD = 4 * 1024 * 1024; // 4MB
+
                 for (let i = 0; i < sourceFiles.length; i++) {
                     const f = sourceFiles[i];
-                    const fileForm = new FormData();
-                    fileForm.append('file', f);
-                    // Use 'path' property if available (react-dropzone populates this for folders)
-                    // or fallback to name
                     const relativePath = (f as any).path || (f as any).webkitRelativePath || f.name;
-                    fileForm.append('filePath', relativePath);
 
                     try {
-                        await api.post(`/files/projects/${projectId}/upload`, fileForm);
+                        if (f.size > CHUNK_THRESHOLD) {
+                            // Use chunked upload for large files
+                            const result = await uploadFileChunked(projectId, f, relativePath, {
+                                chunkSize: getRecommendedChunkSize(f.size),
+                                onProgress: (progress) => {
+                                    if (progress.status === 'finalizing') {
+                                        setUploadProgress(`Finalizing ${f.name}...`);
+                                    } else {
+                                        setUploadProgress(`Uploading ${f.name} (${progress.currentChunk}/${progress.totalChunks} chunks)`);
+                                    }
+                                }
+                            });
+                            
+                            if (!result.success) {
+                                console.error('Chunked upload failed:', f.name, result.error);
+                            }
+                        } else {
+                            // Regular upload for small files
+                            const fileForm = new FormData();
+                            fileForm.append('file', f);
+                            fileForm.append('filePath', relativePath);
+                            await api.post(`/files/projects/${projectId}/upload`, fileForm);
+                        }
                         setUploadProgress(`Uploaded ${i + 1}/${sourceFiles.length}`);
                     } catch (err) {
                         console.error('File upload failed', f.name, err);

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { Folder, FileCode, UploadCloud, ChevronRight, ChevronDown, Loader2, Download, Image as ImageIcon, MoreVertical, Edit2, Trash2, Pencil, LogIn } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getApiUrl } from '@/lib/api';
+import { uploadFileChunked, ChunkedUploadProgress, getRecommendedChunkSize } from '@/lib/chunked-upload';
 import CodeViewer from './code-viewer';
 import { useAuth } from '@/context/auth-context';
 import DuplicateFileModal from './duplicate-file-modal';
@@ -31,6 +32,9 @@ interface UploadProgress {
     progress: number;
     total: number;
     uploaded: number;
+    currentChunk?: number;
+    totalChunks?: number;
+    status?: string;
 }
 
 // Helper function to format file size
@@ -231,37 +235,72 @@ export default function FileExplorer({ projectId, isOwner, onFilesChanged }: { p
         }
     };
     
-    // Upload file with specific mode
+    // Upload file with specific mode - now uses chunked upload for large files
     const uploadFileWithMode = async (file: File, filePath: string, replaceMode: 'replace' | 'keep-both', description: string = '') => {
-        const form = new FormData();
-        form.append('file', file);
-        form.append('filePath', filePath);
-        form.append('replaceMode', replaceMode);
-        form.append('description', description);
-        
         // Set initial progress
         setUploadProgress({
             fileName: file.name,
             progress: 0,
             total: file.size,
-            uploaded: 0
+            uploaded: 0,
+            status: 'starting'
         });
         
+        // Use chunked upload for files > 4MB, regular for smaller files
+        const CHUNK_THRESHOLD = 4 * 1024 * 1024; // 4MB
+        
         try {
-            await api.post(`/files/projects/${projectId}/upload`, form, {
-                onUploadProgress: (progressEvent) => {
-                    const total = progressEvent.total || file.size;
-                    const loaded = progressEvent.loaded;
-                    const percentCompleted = Math.round((loaded * 100) / total);
-                    
-                    setUploadProgress({
-                        fileName: file.name,
-                        progress: percentCompleted,
-                        total: total,
-                        uploaded: loaded
-                    });
+            if (file.size > CHUNK_THRESHOLD) {
+                // Use chunked upload
+                const result = await uploadFileChunked(projectId, file, filePath, {
+                    chunkSize: getRecommendedChunkSize(file.size),
+                    replaceMode,
+                    description,
+                    onProgress: (progress: ChunkedUploadProgress) => {
+                        setUploadProgress({
+                            fileName: progress.fileName,
+                            progress: progress.percentage,
+                            total: progress.totalBytes,
+                            uploaded: progress.uploadedBytes,
+                            currentChunk: progress.currentChunk,
+                            totalChunks: progress.totalChunks,
+                            status: progress.status
+                        });
+                    }
+                });
+
+                if (!result.success) {
+                    if (result.duplicate) {
+                        // Handle duplicate - should not happen since we pass replaceMode
+                        throw new Error('Duplicate file detected');
+                    }
+                    throw new Error(result.error || 'Upload failed');
                 }
-            });
+            } else {
+                // Regular upload for small files
+                const form = new FormData();
+                form.append('file', file);
+                form.append('filePath', filePath);
+                form.append('replaceMode', replaceMode);
+                form.append('description', description);
+                
+                await api.post(`/files/projects/${projectId}/upload`, form, {
+                    onUploadProgress: (progressEvent) => {
+                        const total = progressEvent.total || file.size;
+                        const loaded = progressEvent.loaded;
+                        const percentCompleted = Math.round((loaded * 100) / total);
+                        
+                        setUploadProgress({
+                            fileName: file.name,
+                            progress: percentCompleted,
+                            total: total,
+                            uploaded: loaded,
+                            status: 'uploading'
+                        });
+                    }
+                });
+            }
+            
             setUploadedCount(prev => prev + 1);
         } catch (e) {
             throw e;
